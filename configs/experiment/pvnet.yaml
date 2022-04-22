@@ -1,0 +1,32 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /datamodule: pvnet.yaml
+  - override /model: pvnet.yaml
+  - override /evaluator: pose_evaluator.yaml
+  - override /callbacks: pvnet.yaml
+  - override /logger:
+    - csv.yaml
+    - tensorboard.yaml
+  - override /trainer: pvnet.yaml
+
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+# name of the run determines folder name in logs
+name: 'pvnet'
+
+#seed: 12345
+seed: 0
+
+trainer:
+  min_epochs: 10
+  max_epochs: 10
+
+# passing checkpoint path is necessary
+ckpt_path: null
+obj_cls: ???

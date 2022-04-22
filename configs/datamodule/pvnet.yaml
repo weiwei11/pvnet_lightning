@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+  - /datasource@train_datasource: linemod_train.yaml # choose the datamodule for evaluation
+  - /datasource@test_datasource: linemod_occ.yaml # choose the datamodule for evaluation
+
+_target_: src.datamodules.pvnet_datamodule.PVNetDataModule
+#data_dir: ${data_dir} # data_dir is specified in config.yaml
+train_batch_size: 8
+test_batch_size: 16
+num_workers: 8
+aug_config:
+  rotate_min: -30
+  rotate_max: 30
+  overlap_ratio: 0.8
+  resize_ratio_min: 0.8
+  resize_ratio_max: 1.2

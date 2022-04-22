@@ -1,0 +1,6 @@
+_target_: src.datasources.linemod.Linemod
+obj_cls: ${obj_cls}
+data_root: '${original_work_dir}'
+ann_file: '${data_dir}/linemod/${obj_cls}/test.json'
+obj_file: '${data_dir}/linemod/${obj_cls}/${obj_cls}.ply'
+im_size: (480, 640)

@@ -1,0 +1,16 @@
+defaults:
+  - default.yaml
+
+#accelerator: 'gpu'
+#devices: [0,]
+#strategy: 'dp'
+gpus: [0,]
+
+min_epochs: 10
+max_epochs: 10
+gradient_clip_val: 40
+
+check_val_every_n_epoch: 5
+#limit_train_batches: 0.1
+
+resume_from_checkpoint: null

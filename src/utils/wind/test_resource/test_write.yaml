@@ -1,0 +1,8 @@
+date: 2019-11-06
+pkg:
+  django:
+    version: '{% if pkg.python.version|first == ''2'' %}1.8{% else %}2.2.6{% endif
+      %}'
+  python:
+    date: '{{ date }}'
+    version: 3.6.8
