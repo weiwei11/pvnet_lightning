@@ -6,10 +6,12 @@ import torch.nn as nn
 import torch.optim as optim
 import pytorch_lightning as pl
 import torch.nn.functional as F
+from einops import rearrange
+
 from lib.csrc.uncertainty_pnp import un_pnp_utils
 from lib.csrc.ransac_voting.ransac_voting_gpu import ransac_voting_layer_v3, estimate_voting_distribution_with_mean
 from src.utils.pvnet import pvnet_pose_utils
-from src.evaluators.base_evaluator import BaseEvaluator
+from src.utils.loss import ProxyVotingLoss
 
 
 def decode_keypoint(output, un_pnp=False):
@@ -68,7 +70,9 @@ def solve_poses(output, ref_data, un_pnp=False):
 
 class PVNetLitModule(pl.LightningModule):
 
-    def __init__(self, net: torch.nn.Module, evaluators, lr, weight_decay, milestones, gamma, un_pnp=False):
+    def __init__(self, net: torch.nn.Module, evaluators, train_config, loss_config, un_pnp=False):
+        # train_config = {lr, weight_decay, milestones, gamma}
+        # loss_config = {dpvl_weight}
         super().__init__()
 
         self.save_hyperparameters(logger=False)
@@ -78,6 +82,8 @@ class PVNetLitModule(pl.LightningModule):
 
         self.vote_crit = F.smooth_l1_loss
         self.seg_crit = nn.CrossEntropyLoss()
+        if self.hparams.loss_config.dpvl_weight > 0:
+            self.dpvl_crit = ProxyVotingLoss()
 
         self.val_evaluator = evaluators['val']
         self.test_evaluator = evaluators['test']
@@ -93,15 +99,32 @@ class PVNetLitModule(pl.LightningModule):
         loss = 0
 
         weight = batch['mask'][:, None].float()
-        vote_loss = self.vote_crit(output['vertex'] * weight, batch['vertex'] * weight, reduction='sum')
-        vote_loss = vote_loss / weight.sum() / batch['vertex'].size(1)
+        vertex = batch['vertex']  # vertex is not norm
+        vertex_unit = rearrange(F.normalize(rearrange(vertex, 'b (k d) h w -> b k d h w', d=2), dim=2), 'b k d h w -> b (k d) h w')
+
+        sample_num = weight.sum()
+        b, c, h, w = vertex.shape
+
+        vote_loss = self.vote_crit(output['vertex'] * weight, vertex_unit * weight, reduction='sum')
+        vote_loss = vote_loss / sample_num / c
         loss += vote_loss
+
+        if self.hparams.loss_config.dpvl_weight > 0:
+            output_vertex = output['vertex'].permute(0, 2, 3, 1).view(b, h, w, c // 2, 2)
+            target_vertex = vertex.permute(0, 2, 3, 1).view(b, h, w, c // 2, 2)
+            dpvl_loss = self.dpvl_crit(output_vertex * weight.view([b, h, w, 1, 1]),
+                                       target_vertex * weight.view([b, h, w, 1, 1]), reduction='sum')
+            dpvl_loss = self.hparams.loss_config.dpvl_weight * dpvl_loss / sample_num / c
+            loss += dpvl_loss
 
         mask = batch['mask'].long()
         seg_loss = self.seg_crit(output['seg'], mask)
         loss += seg_loss
 
         loss_dict = {'vote_loss': loss, 'seg_loss': seg_loss, 'loss': loss}
+        if self.hparams.loss_config.dpvl_weight > 0:
+            loss_dict['dpvl_loss'] = dpvl_loss
+
         return loss_dict, output
 
     def training_step(self, batch, batch_idx):
@@ -153,8 +176,8 @@ class PVNetLitModule(pl.LightningModule):
             self.log(f'test/{k}', v, prog_bar=True)
 
     def configure_optimizers(self):
-        lr = self.hparams.lr
-        weight_decay = self.hparams.weight_decay
+        lr = self.hparams.train_config.lr
+        weight_decay = self.hparams.train_config.weight_decay
 
         params = []
         for key, value in self.net.named_parameters():
@@ -162,7 +185,8 @@ class PVNetLitModule(pl.LightningModule):
                 continue
             params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
         optimizer = optim.Adam(params, lr=lr, weight_decay=weight_decay)
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.hparams.milestones, gamma=self.hparams.gamma)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.hparams.train_config.milestones,
+                                                   gamma=self.hparams.train_config.gamma)
         return [optimizer], [scheduler]
 
     def package(self, output, batch, i):

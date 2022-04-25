@@ -69,7 +69,7 @@ class PVNetDataset(data.Dataset):
         if self._transforms is not None:
             inp, kpt_2d, mask = self._transforms(inp, kpt_2d, mask)
 
-        vertex = pvnet_data_utils.compute_vertex(mask, kpt_2d, True).transpose(2, 0, 1)
+        vertex = pvnet_data_utils.compute_vertex(mask, kpt_2d, False).transpose(2, 0, 1)
 
         ret = {'inp': inp, 'mask': mask.astype(np.uint8), 'vertex': vertex, 'img_id': img_id,
                'kpt_2d': kpt_2d.astype(np.float32), 'kpt_3d': kpt_3d,
