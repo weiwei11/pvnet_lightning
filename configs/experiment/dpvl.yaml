@@ -23,8 +23,9 @@ name: 'dpvl'
 #seed: 12345
 seed: 0
 
-loss_config:
-  dpvl_weight: 0.001
+model:
+  loss_config:
+    dpvl_weight: 0.001
 
 trainer:
   min_epochs: 10

@@ -102,7 +102,7 @@ class PVNetLitModule(pl.LightningModule):
         vertex = batch['vertex']  # vertex is not norm
         vertex_unit = rearrange(F.normalize(rearrange(vertex, 'b (k d) h w -> b k d h w', d=2), dim=2), 'b k d h w -> b (k d) h w')
 
-        sample_num = weight.sum()
+        sample_num = max(weight.sum(), 1)
         b, c, h, w = vertex.shape
 
         vote_loss = self.vote_crit(output['vertex'] * weight, vertex_unit * weight, reduction='sum')
